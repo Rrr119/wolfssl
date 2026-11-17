@@ -4,6 +4,7 @@
 
 dist_doc_DATA+= doc/README.txt \
 	doc/QUIC.md \
+	doc/SESSION_TICKETS.md \
 	doc/dilithium-to-mldsa-migration.md \
 	doc/SBOM.md \
 	doc/CRA.md \

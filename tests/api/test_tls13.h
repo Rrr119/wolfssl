@@ -100,6 +100,7 @@ int test_tls13_0rtt_ticket_ex_data_owner(void);
 int test_tls13_0rtt_ticket_ex_data_overlap(void);
 int test_tls13_early_data_bad_record_mac(void);
 int test_tls13_0rtt_fresh_start(void);
+int test_tls13_ticket_key_rotation_resume(void);
 int test_tls13_0rtt_fresh_start_check_args(void);
 int test_tls13_corrupted_finished(void);
 int test_tls13_certificate_verify_bad_sigalgo(void);
@@ -297,6 +298,7 @@ int test_tls13_exporter_suite_decision_coverage(void);
     TEST_DECL_GROUP("tls13", test_tls13_0rtt_ticket_ex_data_overlap), \
     TEST_DECL_GROUP("tls13", test_tls13_early_data_bad_record_mac), \
     TEST_DECL_GROUP("tls13", test_tls13_0rtt_fresh_start), \
+    TEST_DECL_GROUP("tls13", test_tls13_ticket_key_rotation_resume), \
     TEST_DECL_GROUP("tls13", test_tls13_0rtt_fresh_start_check_args), \
     TEST_DECL_GROUP("tls13", test_tls13_unknown_ext_rejected),  \
     TEST_DECL_GROUP("tls13", test_tls13_hrr_recognized_ext_downgrade), \

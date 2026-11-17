@@ -7642,6 +7642,78 @@ int test_tls13_0rtt_fresh_start(void)
     return EXPECT_RESULT();
 }
 
+/* A TLS 1.3 ticket issued before an explicit key rotation must still resume,
+ * and the replacement ticket issued by that resumed connection must itself
+ * resume under the new key. */
+int test_tls13_ticket_key_rotation_resume(void)
+{
+    EXPECT_DECLS;
+#if defined(HAVE_MANUAL_MEMIO_TESTS_DEPENDENCIES) && \
+    defined(WOLFSSL_TLS13) && defined(HAVE_SESSION_TICKET) && \
+    !defined(WOLFSSL_NO_DEF_TICKET_ENC_CB) && \
+    !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT)
+    struct test_memio_ctx test_ctx;
+    WOLFSSL_CTX *ctx_c = NULL, *ctx_s = NULL;
+    WOLFSSL *ssl_c = NULL, *ssl_s = NULL;
+    WOLFSSL_SESSION *oldSess = NULL;
+    WOLFSSL_SESSION *newSess = NULL;
+    char buf[64];
+
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+
+    /* First handshake issues a ticket under the initial key. */
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_3_client_method, wolfTLSv1_3_server_method), 0);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectIntEQ(wolfSSL_read(ssl_c, buf, sizeof(buf)), -1);
+    ExpectIntEQ(wolfSSL_get_error(ssl_c, -1), WOLFSSL_ERROR_WANT_READ);
+    ExpectNotNull(oldSess = wolfSSL_get1_session(ssl_c));
+    ExpectIntGT(oldSess->ticketLen, 0);
+
+    wolfSSL_free(ssl_c); ssl_c = NULL;
+    wolfSSL_free(ssl_s); ssl_s = NULL;
+
+    /* Rotate after the client already holds a ticket. */
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(ctx_s), WOLFSSL_SUCCESS);
+
+    /* The old ticket decrypts with the retained previous key. */
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_3_client_method, wolfTLSv1_3_server_method), 0);
+    if (ssl_s != NULL)
+        ssl_s->options.sessionCacheOff = 1;
+    ExpectIntEQ(wolfSSL_set_session(ssl_c, oldSess), WOLFSSL_SUCCESS);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectIntEQ(wolfSSL_session_reused(ssl_c), 1);
+    /* Consume the replacement ticket, encrypted with the new key. */
+    ExpectIntEQ(wolfSSL_read(ssl_c, buf, sizeof(buf)), -1);
+    ExpectIntEQ(wolfSSL_get_error(ssl_c, -1), WOLFSSL_ERROR_WANT_READ);
+    ExpectNotNull(newSess = wolfSSL_get1_session(ssl_c));
+    ExpectIntGT(newSess->ticketLen, 0);
+
+    wolfSSL_free(ssl_c); ssl_c = NULL;
+    wolfSSL_free(ssl_s); ssl_s = NULL;
+
+    /* The replacement ticket resumes too, proving it used the new key. */
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_3_client_method, wolfTLSv1_3_server_method), 0);
+    if (ssl_s != NULL)
+        ssl_s->options.sessionCacheOff = 1;
+    ExpectIntEQ(wolfSSL_set_session(ssl_c, newSess), WOLFSSL_SUCCESS);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectIntEQ(wolfSSL_session_reused(ssl_c), 1);
+
+    wolfSSL_SESSION_free(oldSess);
+    wolfSSL_SESSION_free(newSess);
+    wolfSSL_free(ssl_c);
+    wolfSSL_free(ssl_s);
+    wolfSSL_CTX_free(ctx_c);
+    wolfSSL_CTX_free(ctx_s);
+#endif
+    return EXPECT_RESULT();
+}
+
 /* Error returns of wolfSSL_CTX_no_early_data_fresh_start_check(). */
 int test_tls13_0rtt_fresh_start_check_args(void)
 {

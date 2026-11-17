@@ -2623,6 +2623,10 @@ long wolfSSL_CTX_get_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
             (keylen != WOLFSSL_TICKET_KEYS_SZ)) {
         ret = WOLFSSL_FAILURE;
     }
+    else if ((ctx->ticketEncCtx == (void*)&ctx->ticketKeyCtx) &&
+            (TicketEncCbCtx_EnsureSetup(ctx) != 0)) {
+        ret = WOLFSSL_FAILURE;
+    }
 #ifndef SINGLE_THREADED
     else if (wc_LockMutex(&ctx->ticketKeyCtx.mutex) != 0) {
         WOLFSSL_MSG("Couldn't lock key context mutex");
@@ -2673,21 +2677,56 @@ long wolfSSL_CTX_set_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
     }
 #endif
     else {
+        word32 expiry0;
+        word32 expiry1;
+
         XMEMCPY(ctx->ticketKeyCtx.name, keys, WOLFSSL_TICKET_NAME_SZ);
+        ctx->ticketKeyCtx.nameInit = 1;
         keys += WOLFSSL_TICKET_NAME_SZ;
         XMEMCPY(ctx->ticketKeyCtx.key[0], keys, WOLFSSL_TICKET_KEY_SZ);
         keys += WOLFSSL_TICKET_KEY_SZ;
         XMEMCPY(ctx->ticketKeyCtx.key[1], keys, WOLFSSL_TICKET_KEY_SZ);
         keys += WOLFSSL_TICKET_KEY_SZ;
-        ato32(keys, &ctx->ticketKeyCtx.expirary[0]);
+        ato32(keys, &expiry0);
         keys += OPAQUE32_LEN;
-        ato32(keys, &ctx->ticketKeyCtx.expirary[1]);
+        ato32(keys, &expiry1);
+        ctx->ticketKeyCtx.expirary[0] = expiry0;
+        ctx->ticketKeyCtx.expirary[1] = expiry1;
+        /* Use the key with the newest expiry for encryption. */
+        ctx->ticketKeyCtx.current =
+            ((sword32)(expiry1 - expiry0) > 0) ? 1 : 0;
 #ifndef SINGLE_THREADED
         wc_UnLockMutex(&ctx->ticketKeyCtx.mutex);
 #endif
     }
 
     return ret;
+}
+
+/* Rotate the default session ticket encryption keys.
+ *
+ * The new key is used for tickets issued from now on. The previous key remains
+ * in the context for decryption, so a client holding a ticket issued before
+ * the rotation can still resume. The same key context is used by TLS 1.2 and
+ * TLS 1.3.
+ *
+ * @param [in, out] ctx  SSL/TLS context object.
+ * @return  WOLFSSL_SUCCESS on success.
+ * @return  BAD_FUNC_ARG when ctx is NULL.
+ * @return  BAD_STATE_E when the context does not use the default ticket
+ *          encryption callback.
+ * @return  Other negative value on random number generation failure.
+ */
+int wolfSSL_CTX_rotate_ticket_keys(WOLFSSL_CTX* ctx)
+{
+    int ret;
+
+    if (ctx == NULL)
+        return BAD_FUNC_ARG;
+
+    ret = TicketEncCbCtx_Rotate(ctx);
+
+    return (ret == 0) ? WOLFSSL_SUCCESS : ret;
 }
 #endif
 

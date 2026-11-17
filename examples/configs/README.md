@@ -38,6 +38,9 @@ Example wolfSSL configuration file templates for use when autoconf is not availa
 2. Add pre-processor macro `WOLFSSL_USER_SETTINGS` to your project.
 3. Make sure and include `#include <wolfssl/wolfcrypt/settings.h>` prior to any other wolfSSL headers in your application.
 
+For session-ticket setup, key rotation and persistence on these profiles, see
+[doc/SESSION_TICKETS.md](../../doc/SESSION_TICKETS.md).
+
 ## Testing with Autoconf
 
 To use these with autoconf:

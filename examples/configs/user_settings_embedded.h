@@ -339,7 +339,9 @@ extern "C" {
 
 /* Session tickets - resume without holding session state on the device.
  * Needs WC_CFG_RTC: a ticket carries a validity time, and settings.h drops
- * ticket support outright when NO_ASN_TIME is set. */
+ * ticket support outright when NO_ASN_TIME is set. See
+ * doc/SESSION_TICKETS.md for the built-in encryption callback, key rotation,
+ * persistence across reboot and TLS 1.3 resumption. */
 #define WC_CFG_SESSION_TICKET      0
 
 /* Session cache size. Needs WC_CFG_RTC for the same reason as tickets -

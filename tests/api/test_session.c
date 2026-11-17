@@ -1738,6 +1738,147 @@ int test_wolfSSL_ticket_keys(void)
     return EXPECT_RESULT();
 }
 
+int test_wolfSSL_CTX_rotate_ticket_keys(void)
+{
+    EXPECT_DECLS;
+#if defined(HAVE_SESSION_TICKET) && !defined(WOLFSSL_NO_DEF_TICKET_ENC_CB) && \
+    !defined(NO_WOLFSSL_SERVER) && !defined(NO_TLS)
+    WOLFSSL_CTX* ctx = NULL;
+    byte keys1[WOLFSSL_TICKET_KEYS_SZ];
+    byte keys2[WOLFSSL_TICKET_KEYS_SZ];
+    byte keys3[WOLFSSL_TICKET_KEYS_SZ];
+    byte zeros[2 * WOLFSSL_TICKET_KEY_SZ];
+    word32 expiry0;
+    word32 expiry1;
+    int current1;
+    int current2;
+
+    XMEMSET(keys1, 0, sizeof(keys1));
+    XMEMSET(keys2, 0, sizeof(keys2));
+    XMEMSET(keys3, 0, sizeof(keys3));
+    XMEMSET(zeros, 0, sizeof(zeros));
+
+    ExpectNotNull(ctx = wolfSSL_CTX_new(wolfSSLv23_server_method()));
+
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(NULL), BAD_FUNC_ARG);
+
+    /* Getting the keys before the first ticket initializes the context. */
+    ExpectIntEQ(wolfSSL_CTX_get_tlsext_ticket_keys(ctx, keys1,
+        sizeof(keys1)), WOLFSSL_SUCCESS);
+    ExpectIntNE(XMEMCMP(keys1 + WOLFSSL_TICKET_NAME_SZ, zeros, sizeof(zeros)),
+        0);
+    ato32(keys1 + WOLFSSL_TICKET_NAME_SZ + 2 * WOLFSSL_TICKET_KEY_SZ,
+        &expiry0);
+    ato32(keys1 + WOLFSSL_TICKET_NAME_SZ + 2 * WOLFSSL_TICKET_KEY_SZ +
+        OPAQUE32_LEN, &expiry1);
+    current1 = ((sword32)(expiry1 - expiry0) > 0) ? 1 : 0;
+
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(ctx), WOLFSSL_SUCCESS);
+    ExpectIntEQ(wolfSSL_CTX_get_tlsext_ticket_keys(ctx, keys2,
+        sizeof(keys2)), WOLFSSL_SUCCESS);
+
+    /* The key name is stable; the last bit only selects a key slot. */
+    ExpectIntEQ(XMEMCMP(keys1, keys2, WOLFSSL_TICKET_NAME_SZ), 0);
+    /* The previous encryption key is still available for decryption. */
+    ExpectTrue((XMEMCMP(keys2 + WOLFSSL_TICKET_NAME_SZ,
+        keys1 + WOLFSSL_TICKET_NAME_SZ +
+        (current1 ? WOLFSSL_TICKET_KEY_SZ : 0), WOLFSSL_TICKET_KEY_SZ) == 0) ||
+        (XMEMCMP(keys2 + WOLFSSL_TICKET_NAME_SZ + WOLFSSL_TICKET_KEY_SZ,
+        keys1 + WOLFSSL_TICKET_NAME_SZ +
+        (current1 ? WOLFSSL_TICKET_KEY_SZ : 0), WOLFSSL_TICKET_KEY_SZ) == 0));
+
+    ato32(keys2 + WOLFSSL_TICKET_NAME_SZ + 2 * WOLFSSL_TICKET_KEY_SZ,
+        &expiry0);
+    ato32(keys2 + WOLFSSL_TICKET_NAME_SZ + 2 * WOLFSSL_TICKET_KEY_SZ +
+        OPAQUE32_LEN, &expiry1);
+    current2 = ((sword32)(expiry1 - expiry0) > 0) ? 1 : 0;
+    ExpectIntNE(current2, current1);
+    ExpectIntNE(XMEMCMP(keys2 + WOLFSSL_TICKET_NAME_SZ +
+        current2 * WOLFSSL_TICKET_KEY_SZ,
+        keys1 + WOLFSSL_TICKET_NAME_SZ +
+        current1 * WOLFSSL_TICKET_KEY_SZ, WOLFSSL_TICKET_KEY_SZ), 0);
+
+    /* A second rotation retains the key that was current in keys2. */
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(ctx), WOLFSSL_SUCCESS);
+    ExpectIntEQ(wolfSSL_CTX_get_tlsext_ticket_keys(ctx, keys3,
+        sizeof(keys3)), WOLFSSL_SUCCESS);
+    ExpectTrue((XMEMCMP(keys3 + WOLFSSL_TICKET_NAME_SZ,
+        keys2 + WOLFSSL_TICKET_NAME_SZ +
+        current2 * WOLFSSL_TICKET_KEY_SZ, WOLFSSL_TICKET_KEY_SZ) == 0) ||
+        (XMEMCMP(keys3 + WOLFSSL_TICKET_NAME_SZ + WOLFSSL_TICKET_KEY_SZ,
+        keys2 + WOLFSSL_TICKET_NAME_SZ +
+        current2 * WOLFSSL_TICKET_KEY_SZ, WOLFSSL_TICKET_KEY_SZ) == 0));
+
+    /* Rotation belongs to the built-in callback. */
+    ExpectIntEQ(wolfSSL_CTX_set_TicketEncCb(ctx, NULL), WOLFSSL_SUCCESS);
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(ctx), BAD_STATE_E);
+
+    wolfSSL_CTX_free(ctx);
+#endif
+    return EXPECT_RESULT();
+}
+
+int test_tls12_ticket_key_rotation_resume(void)
+{
+    EXPECT_DECLS;
+#if defined(HAVE_MANUAL_MEMIO_TESTS_DEPENDENCIES) && \
+    !defined(WOLFSSL_NO_TLS12) && defined(HAVE_SESSION_TICKET) && \
+    !defined(WOLFSSL_NO_DEF_TICKET_ENC_CB) && \
+    !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT)
+    struct test_memio_ctx test_ctx;
+    WOLFSSL_CTX *ctx_c = NULL, *ctx_s = NULL;
+    WOLFSSL *ssl_c = NULL, *ssl_s = NULL;
+    WOLFSSL_SESSION *oldSess = NULL;
+    WOLFSSL_SESSION *newSess = NULL;
+
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_2_client_method, wolfTLSv1_2_server_method), 0);
+    ExpectIntEQ(wolfSSL_CTX_UseSessionTicket(ctx_c), WOLFSSL_SUCCESS);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectNotNull(oldSess = wolfSSL_get1_session(ssl_c));
+    ExpectIntGT(oldSess->ticketLen, 0);
+
+    wolfSSL_free(ssl_c); ssl_c = NULL;
+    wolfSSL_free(ssl_s); ssl_s = NULL;
+
+    ExpectIntEQ(wolfSSL_CTX_rotate_ticket_keys(ctx_s), WOLFSSL_SUCCESS);
+
+    /* The ticket from before the rotation resumes using the previous key. */
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_2_client_method, wolfTLSv1_2_server_method), 0);
+    if (ssl_s != NULL)
+        ssl_s->options.sessionCacheOff = 1;
+    ExpectIntEQ(wolfSSL_set_session(ssl_c, oldSess), WOLFSSL_SUCCESS);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectIntEQ(wolfSSL_session_reused(ssl_c), 1);
+    ExpectNotNull(newSess = wolfSSL_get1_session(ssl_c));
+    ExpectIntGT(newSess->ticketLen, 0);
+
+    wolfSSL_free(ssl_c); ssl_c = NULL;
+    wolfSSL_free(ssl_s); ssl_s = NULL;
+
+    /* The replacement ticket was encrypted with the new key. */
+    XMEMSET(&test_ctx, 0, sizeof(test_ctx));
+    ExpectIntEQ(test_memio_setup(&test_ctx, &ctx_c, &ctx_s, &ssl_c, &ssl_s,
+        wolfTLSv1_2_client_method, wolfTLSv1_2_server_method), 0);
+    if (ssl_s != NULL)
+        ssl_s->options.sessionCacheOff = 1;
+    ExpectIntEQ(wolfSSL_set_session(ssl_c, newSess), WOLFSSL_SUCCESS);
+    ExpectIntEQ(test_memio_do_handshake(ssl_c, ssl_s, 10, NULL), 0);
+    ExpectIntEQ(wolfSSL_session_reused(ssl_c), 1);
+
+    wolfSSL_SESSION_free(oldSess);
+    wolfSSL_SESSION_free(newSess);
+    wolfSSL_free(ssl_c);
+    wolfSSL_free(ssl_s);
+    wolfSSL_CTX_free(ctx_c);
+    wolfSSL_CTX_free(ctx_s);
+#endif
+    return EXPECT_RESULT();
+}
+
 #if defined(HAVE_SESSION_TICKET) && !defined(WOLFSSL_NO_DEF_TICKET_ENC_CB) && \
     !defined(NO_WOLFSSL_SERVER) && !defined(NO_TLS) && !defined(SINGLE_THREADED)
 

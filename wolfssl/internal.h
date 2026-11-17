@@ -4213,6 +4213,11 @@ typedef struct TicketEncCbCtx {
     byte key[2][WOLFSSL_TICKET_KEY_SZ];
     /* Expirary date of keys. */
     word32 expirary[2];
+    /* Key index currently used for encryption. */
+    int current;
+    /* Set when name and RNG have been initialized. */
+    byte nameInit;
+    byte rngInit;
     /* Random number generator to use for generating name, keys and IV. */
     WC_RNG rng;
 #ifndef SINGLE_THREADED
@@ -4222,6 +4227,9 @@ typedef struct TicketEncCbCtx {
     /* Pointer back to SSL_CTX. */
     WOLFSSL_CTX* ctx;
 } TicketEncCbCtx;
+
+WOLFSSL_LOCAL int TicketEncCbCtx_EnsureSetup(WOLFSSL_CTX* ctx);
+WOLFSSL_LOCAL int TicketEncCbCtx_Rotate(WOLFSSL_CTX* ctx);
 
 #endif /* !WOLFSSL_NO_DEF_TICKET_ENC_CB && !NO_WOLFSSL_SERVER */
 

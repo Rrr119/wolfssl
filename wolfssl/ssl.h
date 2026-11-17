@@ -6401,6 +6401,7 @@ WOLFSSL_API long wolfSSL_CTX_get_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
      unsigned char *keys, int keylen);
 WOLFSSL_API long wolfSSL_CTX_set_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
      const void *keys_vp, int keylen);
+WOLFSSL_API int wolfSSL_CTX_rotate_ticket_keys(WOLFSSL_CTX* ctx);
 #endif
 
 WOLFSSL_API void wolfSSL_get0_alpn_selected(const WOLFSSL *ssl,

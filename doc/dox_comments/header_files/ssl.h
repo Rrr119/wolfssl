@@ -14816,6 +14816,117 @@ int wolfSSL_CTX_set_TicketEncCtx(WOLFSSL_CTX* ctx, void* userCtx);
 void* wolfSSL_CTX_get_TicketEncCtx(WOLFSSL_CTX* ctx);
 
 /*!
+    \ingroup Setup
+
+    \brief Serializes the built-in session ticket key set.
+
+    The output contains the key name, both key slots and both expiry
+    timestamps, in the format accepted by
+    wolfSSL_CTX_set_tlsext_ticket_keys(). It is secret key material and must
+    be stored protected. The first call also initializes the key context, so
+    the returned keys can be saved before the first handshake.
+
+    This API requires HAVE_SESSION_TICKET, the default ticket encryption
+    callback and a server build.
+
+    \return WOLFSSL_SUCCESS on success.
+    \return WOLFSSL_FAILURE if ctx or keys is NULL, keylen is not
+    WOLFSSL_TICKET_KEYS_SZ, key initialization fails or the key context mutex
+    cannot be locked.
+
+    \param ctx SSL/TLS context object.
+    \param keys output buffer of WOLFSSL_TICKET_KEYS_SZ bytes.
+    \param keylen size of keys in bytes.
+
+    _Example_
+    \code
+    byte keys[WOLFSSL_TICKET_KEYS_SZ];
+    if (wolfSSL_CTX_get_tlsext_ticket_keys(ctx, keys, sizeof(keys)) !=
+            WOLFSSL_SUCCESS) {
+        // handle error
+    }
+    \endcode
+
+    \sa wolfSSL_CTX_set_tlsext_ticket_keys
+    \sa wolfSSL_CTX_rotate_ticket_keys
+*/
+long wolfSSL_CTX_get_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
+     unsigned char *keys, int keylen);
+
+/*!
+    \ingroup Setup
+
+    \brief Restores the built-in session ticket key set serialized by
+    wolfSSL_CTX_get_tlsext_ticket_keys().
+
+    Call this before accepting connections when tickets must survive a reboot.
+    The blob is secret key material. The key name is stored verbatim; its last
+    bit is masked only when a ticket is encrypted or decrypted.
+
+    \return WOLFSSL_SUCCESS on success.
+    \return WOLFSSL_FAILURE if ctx or keys is NULL, keylen is not
+    WOLFSSL_TICKET_KEYS_SZ or the key context mutex cannot be locked.
+
+    \param ctx SSL/TLS context object.
+    \param keys serialized key set.
+    \param keylen size of keys in bytes.
+
+    _Example_
+    \code
+    if (wolfSSL_CTX_set_tlsext_ticket_keys(ctx, keys, sizeof(keys)) !=
+            WOLFSSL_SUCCESS) {
+        // handle error
+    }
+    \endcode
+
+    \sa wolfSSL_CTX_get_tlsext_ticket_keys
+    \sa wolfSSL_CTX_rotate_ticket_keys
+*/
+long wolfSSL_CTX_set_tlsext_ticket_keys(WOLFSSL_CTX *ctx,
+     const void *keys_vp, int keylen);
+
+/*!
+    \ingroup Setup
+
+    \brief Rotates the built-in server session ticket encryption keys.
+
+    Generates a new key and makes it current for tickets issued from now on.
+    The key that was current before the call remains available for decryption,
+    so tickets issued before the rotation can still resume. The same key
+    context is used for TLS 1.2 and TLS 1.3 tickets.
+
+    Rotate no more often than the ticket lifetime hint. A third rotation
+    reuses the oldest key slot, which invalidates tickets older than the
+    previous generation.
+
+    This API requires HAVE_SESSION_TICKET, the default ticket encryption
+    callback and a server build. A context with an application callback set by
+    wolfSSL_CTX_set_TicketEncCb() must implement rotation in that callback.
+    The OpenSSL compatibility header provides the same call as
+    SSL_CTX_rotate_ticket_keys().
+
+    \return WOLFSSL_SUCCESS on success.
+    \return BAD_FUNC_ARG if ctx is NULL.
+    \return BAD_STATE_E if the context does not use the built-in ticket
+    encryption callback.
+    \return Other negative values when random number generation fails.
+
+    \param ctx SSL/TLS context object.
+
+    _Example_
+    \code
+    if (wolfSSL_CTX_rotate_ticket_keys(ctx) != WOLFSSL_SUCCESS) {
+        // handle error
+    }
+    \endcode
+
+    \sa wolfSSL_CTX_get_tlsext_ticket_keys
+    \sa wolfSSL_CTX_set_tlsext_ticket_keys
+    \sa wolfSSL_CTX_set_TicketHint
+*/
+int wolfSSL_CTX_rotate_ticket_keys(WOLFSSL_CTX* ctx);
+
+/*!
     \brief This function sets the handshake done callback. The hsDoneCb and
     hsDoneCtx members of the WOLFSSL structure are set in this function.
 
