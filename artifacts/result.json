@@ -1,0 +1,18 @@
+{
+  "uid": "23212",
+  "harness": "Codex CLI",
+  "snapshotUrl": "https://github.com/Rrr119/wolfssl/commit/94efa96516733654192341047999dc7134648809",
+  "harnessVersion": "codex-cli 0.167.2",
+  "operatingSystem": "Ubuntu 26.04.1 LTS",
+  "operatingSystemCell": [
+    "MacOS/Linux"
+  ],
+  "outputDirectory": "/home/dev/feedback/uid23212",
+  "wslDistro": "Ubuntu-26.04",
+  "B": {
+    "success": false,
+    "side": "B",
+    "error": "推送 23212-B 连续 2 次失败：To https://github.com/Rrr119/wolfssl.git · ! [remote rejected]       HEAD -> 23212-B (refusing to allow a Personal Access Token to create or update workflow `.github/workflows/rtl8735b.yml` without `workflow` scope)",
+    "attempts": 4
+  }
+}
